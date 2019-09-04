@@ -14,16 +14,12 @@ def check_hosts_network():
         print(error)
 
 
-def get_interface_name():
-    return subprocess.getoutput("ifconfig -s| grep wl | cut -d ' ' -f 1")
-
-
 def get_current_ip():
     return subprocess.getoutput("hostname -I")
 
 
 def get_current_network_mask():
-    interface_name = get_interface_name()
+    interface_name = subprocess.getoutput("ifconfig -s | grep wl | cut -d ' ' -f 1")
     return subprocess.getoutput("ifconfig" + interface_name + "| grep -Po 'netmask \K.*' | cut -d ' ' -f 1")
 
 
