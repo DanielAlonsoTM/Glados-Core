@@ -1,7 +1,13 @@
 import os
+import subprocess
 
 cmd_ls = 'ls -l /'
-cmd_nmap = 'nmap -sP 192.168.1.1/24'
-
 os.system(cmd_ls)
-os.system(cmd_nmap)
+
+cmd_nmap = 'nmap -sP 192.168.1.1/24'
+status, result = subprocess.getstatusoutput(cmd_nmap)
+
+if status == 0:
+    os.system(cmd_nmap)
+else:
+    print("nmap is not installed")
