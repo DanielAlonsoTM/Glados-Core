@@ -15,4 +15,7 @@ def check_package_installed(package_name):
 def install_package(package_name):
     sudo_password = 'password'
     command = 'apt install ' + package_name
-    os.system('echo %s|sudo -S %s' % (sudo_password, command))
+    try:
+        os.system('echo %s|sudo -S %s' % (sudo_password, command))
+    except OSError as error:
+        print(error)
