@@ -1,14 +1,7 @@
-import os
-import subprocess
+from module_packages.manager import check_package_installed
+from module_network.scanning import *
 
-# cmd_ls = 'ls -l /'
-# os.system(cmd_ls)
+cmd = "nmap"
+check_package_installed(cmd)
 
-cmd_nmap = 'nmap -sP 192.168.1.1/24'
-status, result = subprocess.getstatusoutput(cmd_nmap)
-
-if status == 0:
-    print('status value = ' + str(status))
-    # os.system(cmd_nmap)
-else:
-    print("nmap is not installed")
+check_hosts_network()
