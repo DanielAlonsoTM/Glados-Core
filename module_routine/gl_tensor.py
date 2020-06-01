@@ -1,4 +1,7 @@
 import functools
+import random
+import string
+from os import remove
 import tensorflow as tf
 import pandas as pd
 import numpy as np
@@ -25,12 +28,6 @@ def get_dataset(file_path, **kwargs):
         ignore_errors=True,
         **kwargs)
     return dataset
-
-
-def show_batch(dataset):
-    for batch, label, in dataset.take(1):
-        for key, value in batch.items():
-            print('{:20s}:{}'.format(key, value.numpy()))
 
 
 class PackNumericFeatures(object):
@@ -72,7 +69,6 @@ def build_model():
 # DataBase #
 ############
 # Get data from database
-print('Getting data from database...')
 list_data = util_database.get_instruction_collection(DEVICE_TO_INSPECT)
 
 # Determinate first 70% elements from data
@@ -89,18 +85,15 @@ for item_data in range(0, data_size):
     else:
         list_test_data.append(list_data[item_data])
 
-print('Elements to train: {}\nElements to test: {}\n'.format(len(list_train_data), len(list_test_data)))
-
 # Create file csv with data from database
-print('Creating csv files...')
 # To train
 util_files.create_csv(list_train_data, TRAIN_PATH_CSV)
 # To test
 util_files.create_csv(list_test_data, TEST_PATH_CSV)
 
-##################
-# TensorFlow
-##################
+##############
+# TensorFlow #
+##############
 # Column to use
 LABEL_COLUMN = 'status'
 LABELS = [0, 1]
@@ -112,25 +105,13 @@ np.set_printoptions(precision=3, suppress=True)
 raw_train_dataset = get_dataset(TRAIN_PATH_CSV)
 raw_test_dataset = get_dataset(TEST_PATH_CSV)
 
-# Show dataset readable
-print('\nRaw train dataset:')
-show_batch(raw_train_dataset)
-print('\nRaw test dataset:')
-show_batch(raw_test_dataset)
-
 # Define general processor model to separate numeric fields to others
 NUMERIC_FEATURES = ['delay']
 
 packed_train_data = raw_train_dataset.map(PackNumericFeatures(NUMERIC_FEATURES))
 packed_test_data = raw_test_dataset.map(PackNumericFeatures(NUMERIC_FEATURES))
 
-print('\nPacked numeric data Train:')
-show_batch(packed_train_data)
-print('\nPacked numeric data Test:')
-show_batch(packed_test_data)
-
 # Data normalized
-print('\nNormalizing data...')
 desc = pd.read_csv(TRAIN_PATH_CSV)[NUMERIC_FEATURES].describe()
 
 MEAN = np.array(desc.T['mean'])
@@ -161,54 +142,56 @@ for feature, vocab in CATEGORIES.items():
 # Build categorical layer (DON'T DELETE)
 categorical_layer = tf.keras.layers.DenseFeatures(categorical_columns)
 
-################
-# Check Layers #
-################
-# Create example_batch
-CSV_COLUMNS = ['status', 'date', 'delay', 'action']
-temp_dataset = get_dataset(TRAIN_PATH_CSV, column_names=CSV_COLUMNS)
-example_batch, labels_batch = next(iter(packed_train_data))
-
-print('\nNumerical layer:\n{}'.format(numeric_layer(example_batch).numpy()))
-print('\nCategorical layer:\n{}'.format(categorical_layer(example_batch).numpy()[0]))
-
 # Preprocessing
 preprocessing_layer = tf.keras.layers.DenseFeatures(categorical_columns + numeric_columns)
-print('\nPreprocessing layer:\n{}'.format(preprocessing_layer(example_batch).numpy()[0]))
 
 # Build model
-print('\nBuilding model...')
 model = build_model()
 
 # Train model (That point is wrong)
-print('\nTraining model...')
 train_data = packed_train_data.shuffle(500)
 test_data = packed_test_data
 
 model.fit(train_data, epochs=10)
 
-test_loss, test_accuracy = model.evaluate(test_data)
-
-print('\n\nTest Loss {:.2%}%, Test Accuracy {:.2%}%'.format(test_loss, test_accuracy))
-
+# Make predictions and build data output
 predictions = model.predict(test_data)
 
 result_list = []
-# Show some results
-print('\n======\nResults\n======')
+
 for prediction, status_device, time in zip(predictions, list(test_data)[0][1], list(test_data)[2][0]['date']):
     prediction = tf.sigmoid(prediction).numpy()
     time = str(time)[12:-26]
     status_device = int(status_device)
+
+    # Take only predictions above 75% precision
     if prediction >= 0.75:
-        print('Predicted status: {:.2%}'.format(prediction[0]),
-              '| Actual outcome: ',
-              'TURN_ON' if bool(status_device) else 'TURN_OFF',
-              '| Date: {}'.format(time))
+        # Build data
+        random_id = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
 
-        result_list.append({'time': time,
-                            'status_device': status_device,
-                            'precision': prediction[0]})
+        data_map = {
+            'idRoutine': 'routine_{}'.format(random_id),
+            'deviceId': DEVICE_TO_INSPECT,
+            'name': 'Not define yet',
+            'action': status_device,
+            'precision': float('{:.4}'.format(prediction[0])),
+            'time_init': time,
+            'active': 0}
 
-for result in result_list:
-    print(result)
+        result_list.append(data_map)
+
+# Remove redundant data
+if len(result_list) > 1:
+    for result in result_list:
+        for result_compare in result_list:
+            if result != result_compare:
+                if (result['time_init'] == result_compare['time_init']) & (
+                        result['action'] == result_compare['action']):
+                    result_list.remove(result_compare)
+
+# Insert routines in database
+util_database.insert_routine(result_list)
+
+# Delete csv files from system
+remove(TRAIN_PATH_CSV)
+remove(TEST_PATH_CSV)
