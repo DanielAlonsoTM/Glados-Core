@@ -4,3 +4,4 @@
 
 /resources/gl_train.csv
 /resources/gl_test.csv
+utils/__pycache__/
