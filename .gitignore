@@ -1,3 +1,6 @@
 /glados-core.iml
 /.idea/
 /venv/
+
+/resources/gl_train.csv
+/resources/gl_test.csv
