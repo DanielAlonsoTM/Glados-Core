@@ -29,3 +29,22 @@ def get_instruction_collection(device_id):
         list_items.append(item_array)
 
     return list_items
+
+
+def insert_routine(documents):
+    # Reference collection
+    routines_collection = DB['routines']
+    devices_collection = DB['devices']
+
+    # Get roomId
+    for document in documents:
+        device_id = document['deviceId']
+        room_id = int(devices_collection.find_one({'idDevice': device_id})['roomId'])
+
+        document.update({'roomId': room_id})
+
+    # Insert document
+    try:
+        routines_collection.insert_many(documents)
+    except Exception as exc:
+        print(exc)
